@@ -1,284 +1,219 @@
 const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d');
 
-        // Konstanta untuk ukuran objek
-        const PLAYER_WIDTH = 30;
-        const PLAYER_HEIGHT = 30;
-        const BULLET_RADIUS = 5;
-        const ENEMY_SIZE = 50;
-        const ENEMY_BULLET_RADIUS = 5;
+// Game variables
+let score = 0;
+let playerHP = 3;
+let gameOver = false;
+let canShoot = true;
+let wave = 1;
+let powerUpActive = null;
+let powerUpDuration = 0;
+const keys = {};
+const powerUps = [];
 
-        // Karakter utama
-        const player = {
-            x: 50,
-            y: canvas.height / 2 - PLAYER_HEIGHT / 2,
-            width: PLAYER_WIDTH,
-            height: PLAYER_HEIGHT,
-            color: 'blue',
-            dx: 0,
-            dy: 0,
-            speed: 5,
-            health: 3
-        };
+// Player object
+const player = {
+    x: canvas.width / 2 - 25,
+    y: canvas.height - 100,
+    width: 50,
+    height: 50,
+    speed: 5,
+    lasers: []
+};
 
-        // Musuh
-        const enemies = [];
-        const enemyBullets = [];
+// Alien array
+let aliens = [];
+const alienLasers = [];
 
-        // Peluru
-        const bullets = [];
-        let canShoot = true; // Pembatas tembakan
+// Create aliens
+function createAliens() {
+    aliens = [];
+    const rows = 3 + wave;
+    const cols = 6 + Math.min(wave, 4);
+    const speed = 1 + wave * 0.2;
 
-        // Skor dan kill target
-        let score = 0;
-        let kills = 0;
-
-        // Fungsi menggambar objek
-        function drawPlayer() {
-            ctx.fillStyle = player.color;
-            ctx.beginPath();
-            ctx.moveTo(player.x, player.y);
-            ctx.lineTo(player.x + player.width, player.y + player.height / 2);
-            ctx.lineTo(player.x, player.y + player.height);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        function drawEnemies() {
-            enemies.forEach(enemy => {
-                ctx.fillStyle = enemy.color;
-                ctx.beginPath();
-                ctx.moveTo(enemy.x, enemy.y);
-                ctx.lineTo(enemy.x + enemy.size, enemy.y + enemy.size / 2);
-                ctx.lineTo(enemy.x, enemy.y + enemy.size);
-                ctx.closePath();
-                ctx.fill();
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            aliens.push({
+                x: 100 + col * 80,
+                y: 50 + row * 60,
+                width: 40,
+                height: 40,
+                speed: speed,
+                direction: 1
             });
         }
+    }
+}
 
-        function drawBullets() {
-            bullets.forEach(bullet => {
-                ctx.fillStyle = 'red';
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, BULLET_RADIUS, 0, Math.PI * 2);
-                ctx.fill();
-            });
+// Move and draw aliens
+function moveAliens() {
+    aliens.forEach(alien => {
+        alien.x += alien.speed * alien.direction;
+        if (alien.x < 0 || alien.x + alien.width > canvas.width) {
+            alien.direction *= -1;
+            alien.y += 20;
         }
+    });
+}
 
-        function drawEnemyBullets() {
-            enemyBullets.forEach(bullet => {
-                ctx.fillStyle = 'green';
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, ENEMY_BULLET_RADIUS, 0, Math.PI * 2);
-                ctx.fill();
-            });
+function drawAliens() {
+    aliens.forEach(alien => {
+        ctx.fillStyle = 'green';
+        ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
+    });
+}
+
+// Gambar Player
+function drawPlayer() {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+// Handle power-ups
+function spawnPowerUp() {
+    if (Math.random() < 0.01) {
+        const types = ['double', 'spread', 'rapid'];
+        powerUps.push({
+            x: Math.random() * (canvas.width - 30),
+            y: -30,
+            type: types[Math.floor(Math.random() * types.length)]
+        });
+    }
+}
+
+function drawPowerUps() {
+    powerUps.forEach((powerUp, index) => {
+        ctx.fillStyle = 'yellow';
+        ctx.fillRect(powerUp.x, powerUp.y, 30, 30);
+        powerUp.y += 2; 
+        if (powerUp.y > canvas.height) powerUps.splice(index, 1);
+    });
+}
+
+// Handle power-up collision
+function handlePowerUpCollision() {
+    powerUps.forEach((powerUp, index) => {
+        if (
+            powerUp.x < player.x + player.width &&
+            powerUp.x + 30 > player.x &&
+            powerUp.y < player.y + player.height &&
+            powerUp.y + 30 > player.y
+        ) {
+            powerUpActive = powerUp.type;
+            powerUpDuration = 600;
+            powerUps.splice(index, 1);
         }
+    });
+}
 
-        function drawHealth() {
-            ctx.fillStyle = 'white';
-            ctx.font = '24px Arial';
-            ctx.fillText('Health: ' + player.health, canvas.width - 150, 30);
+// Fire lasers based on power-up
+function fireLaser() {
+    if (powerUpActive === 'double') {
+        player.lasers.push({ x: player.x + 5, y: player.y, speed: 6 });
+        player.lasers.push({ x: player.x + player.width - 10, y: player.y, speed: 6 });
+    } else if (powerUpActive === 'spread') {
+        player.lasers.push({ x: player.x + player.width / 2 - 2.5, y: player.y, speed: 6 });
+        player.lasers.push({ x: player.x, y: player.y, speed: 6, angle: -0.1 });
+        player.lasers.push({ x: player.x + player.width, y: player.y, speed: 6, angle: 0.1 });
+    } else {
+        player.lasers.push({ x: player.x + player.width / 2 - 2.5, y: player.y, speed: 6 });
+    }
+}
+
+// Move and draw lasers
+function drawLasers() {
+    player.lasers.forEach((laser, index) => {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(laser.x, laser.y, 5, 10);
+        laser.y -= laser.speed;
+        if (laser.angle) laser.x += Math.sin(laser.angle) * 2;
+
+        // Check collision with aliens
+        aliens.forEach((alien, alienIndex) => {
+            if (
+                laser.x < alien.x + alien.width &&
+                laser.x + 5 > alien.x &&
+                laser.y < alien.y + alien.height &&
+                laser.y + 10 > alien.y
+            ) {
+                player.lasers.splice(index, 1);
+                aliens.splice(alienIndex, 1);
+                score += 100;
+            }
+        });
+
+        if (laser.y < 0) player.lasers.splice(index, 1);
+    });
+}
+
+// Draw UI
+function drawUI() {
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Score: ${score}`, 10, 30);
+    ctx.fillText(`HP: ${playerHP}`, 10, 60);
+    ctx.fillText(`Wave: ${wave}`, 10, 90);
+    if (powerUpActive) {
+        ctx.fillText(`Power-Up: ${powerUpActive.toUpperCase()} (${Math.ceil(powerUpDuration / 60)}s)`, 10, 120);
+    }
+}
+
+// Handle key events
+document.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    if ((e.key === ' ' || e.key === 'w') && canShoot) {
+        fireLaser();
+        canShoot = false;
+        setTimeout(() => canShoot = true, powerUpActive === 'rapid' ? 100 : 300);
+    }
+});
+document.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+});
+
+// Check wave
+function checkWave() {
+    if (aliens.length === 0) {
+        wave++;
+        createAliens();
+    }
+}
+
+// Move player
+function movePlayer() {
+    if (keys['a'] && player.x > 0) player.x -= player.speed;
+    if (keys['d'] && player.x + player.width < canvas.width) player.x += player.speed;
+    if (keys['w'] && player.y > 0) player.y -= player.speed;
+    if (keys['s'] && player.y + player.height < canvas.height) player.y += player.speed;
+}
+
+// Game loop
+function gameLoop() {
+    if (gameOver) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    movePlayer();
+    moveAliens();
+    drawPlayer();
+    drawAliens();
+    drawLasers();
+    drawPowerUps();
+    handlePowerUpCollision();
+    spawnPowerUp();
+    drawUI();
+    checkWave();
+
+    if (powerUpActive) {
+        powerUpDuration--;
+        if (powerUpDuration <= 0) {
+            powerUpActive = null;
         }
+    }
 
-        function drawScore() {
-            ctx.fillStyle = 'white';
-            ctx.font = '24px Arial';
-            ctx.fillText('Score: ' + score, 10, 30);
-        }
+    requestAnimationFrame(gameLoop);
+}
 
-        function drawVictory() {
-            ctx.fillStyle = 'white';
-            ctx.font = '48px Arial';
-            ctx.fillText('Victory!', canvas.width / 2 - 100, canvas.height / 2);
-        }
-
-        function drawGameOver() {
-            ctx.fillStyle = 'white';
-            ctx.font = '48px Arial';
-            ctx.fillText('Game Over!', canvas.width / 2 - 150, canvas.height / 2);
-        }
-
-        // Update game state
-        function update() {
-            // Check game over condition
-            if (player.health <= 0) {
-                drawGameOver();
-                return;
-            }
-
-            // Victory condition
-            if (kills >= 100) {
-                drawVictory();
-                return;
-            }
-
-            // Update player position
-            player.x += player.dx;
-            player.y += player.dy;
-
-            // Check boundaries for player movement
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
-            if (player.y < 0) player.y = 0;
-            if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
-
-            // Update bullet position
-            bullets.forEach(bullet => {
-                bullet.x += bullet.dx;
-                bullet.y += bullet.dy;
-            });
-
-            // Remove bullets off-screen
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                if (bullets[i].x > canvas.width) {
-                    bullets.splice(i, 1);
-                }
-            }
-
-            // Update enemy bullet position
-            enemyBullets.forEach(bullet => {
-                bullet.x += bullet.dx;
-                bullet.y += bullet.dy;
-            });
-
-            // Remove enemy bullets off-screen
-            for (let i = enemyBullets.length - 1; i >= 0; i--) {
-                if (enemyBullets[i].x < 0 || enemyBullets[i].x > canvas.width || enemyBullets[i].y < 0 || enemyBullets[i].y > canvas.height) {
-                    enemyBullets.splice(i, 1);
-                }
-            }
-
-            // Check for bullet collision with enemies
-            for (let i = 0; i < bullets.length; i++) {
-                for (let j = 0; j < enemies.length; j++) {
-                    let bullet = bullets[i];
-                    let enemy = enemies[j];
-                    let distX = bullet.x - (enemy.x + enemy.size / 2);
-                    let distY = bullet.y - (enemy.y + enemy.size / 2);
-                    let distance = Math.sqrt(distX * distX + distY * distY);
-
-                    if (distance < BULLET_RADIUS + enemy.size / 2) {
-                        score++; // Increase score
-                        kills++; // Increase kill count
-                        bullets.splice(i, 1); // Remove bullet
-                        enemies.splice(j, 1); // Remove enemy
-                        break;
-                    }
-                }
-            }
-
-            // Check for collision with enemy bullets
-            for (let i = 0; i < enemyBullets.length; i++) {
-                let bullet = enemyBullets[i];
-                let distX = bullet.x - (player.x + player.width / 2);
-                let distY = bullet.y - (player.y + player.height / 2);
-                let distance = Math.sqrt(distX * distX + distY * distY);
-
-                if (distance < ENEMY_BULLET_RADIUS + player.width / 2) {
-                    player.health--; // Decrease health
-                    enemyBullets.splice(i, 1); // Remove enemy bullet
-                    break;
-                }
-            }
-
-            // Move enemies randomly
-            enemies.forEach(enemy => {
-                enemy.x += enemy.dx;
-                enemy.y += enemy.dy;
-
-                // Bounce the enemy when it hits the canvas edges
-                if (enemy.x < 0 || enemy.x + enemy.size > canvas.width) {
-                    enemy.dx = -enemy.dx;
-                }
-                if (enemy.y < 0 || enemy.y + enemy.size > canvas.height) {
-                    enemy.dy = -enemy.dy;
-                }
-            });
-
-            // Randomly shoot enemy bullets
-            enemies.forEach(enemy => {
-                if (Math.random() < 0.01) { // 1% chance to shoot
-                    enemyBullets.push({
-                        x: enemy.x + enemy.size / 2,
-                        y: enemy.y + enemy.size / 2,
-                        dx: -5, // Move bullet left
-                        dy: 0
-                    });
-                }
-            });
-
-            // Drawing everything
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawPlayer();
-            drawEnemies();
-            drawBullets();
-            drawEnemyBullets();
-            drawHealth();
-            drawScore();
-        }
-
-        // Handle player movement
-        function movePlayer(e) {
-            if (e.key === 'ArrowRight' || e.key === 'd') {
-                player.dx = player.speed;
-            }
-            if (e.key === 'ArrowLeft' || e.key === 'a') {
-                player.dx = -player.speed;
-            }
-            if (e.key === 'ArrowUp' || e.key === 'w') {
-                player.dy = -player.speed;
-            }
-            if (e.key === 'ArrowDown' || e.key === 's') {
-                player.dy = player.speed;
-            }
-            if (e.key === ' ' && canShoot) { // Space to shoot
-                bullets.push({
-                    x: player.x + player.width,
-                    y: player.y + player.height / 2,
-                    dx: 7,
-                    dy: 0
-                });
-                canShoot = false; // Disable shooting until bullet leaves the screen
-                setTimeout(() => {
-                    canShoot = true; // Re-enable shooting after a delay
-                }, 200); // Delay before next shot
-            }
-        }
-
-        // Stop player movement when key is released
-        function stopPlayerMovement(e) {
-            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                player.dx = 0;
-                player.dy = 0;
-            }
-        }
-
-        // Add enemies to the game
-        function addEnemies() {
-            const enemyCount = 10; // Start with 10 enemies
-            for (let i = 0; i < enemyCount; i++) {
-                const enemy = {
-                    x: Math.random() * (canvas.width - ENEMY_SIZE),
-                    y: Math.random() * (canvas.height - ENEMY_SIZE),
-                    size: ENEMY_SIZE,
-                    color: 'purple',
-                    dx: (Math.random() - 0.5) * 4,
-                    dy: (Math.random() - 0.5) * 4
-                };
-                enemies.push(enemy);
-            }
-        }
-
-        // Main game loop
-        function gameLoop() {
-            update();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // Initialize game
-        addEnemies();
-        gameLoop();
-
-        // Event listeners for player movement
-        document.addEventListener('keydown', movePlayer);
-        document.addEventListener('keyup', stopPlayerMovement);
+// Initialize game
+createAliens();
+gameLoop();
