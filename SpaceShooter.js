@@ -11,7 +11,7 @@ const alienImage = new Image();
 alienImage.src = 'path/to/alien.png';
 
 const backgroundImage = new Image();
-backgroundImage.src = 'images/space.png';
+backgroundImage.src = 'images/bg_space_seamless_1.png';
 
 const enemyImages = {
     1: new Image(),
@@ -33,7 +33,7 @@ const enemyMap = [
 ];
 
 let imagesLoaded = 0;
-const totalImages = 5; // Player, 3 musuh, background
+const totalImages = 5; 
 
 function imageLoaded() {
     imagesLoaded++;
@@ -49,7 +49,9 @@ enemyImages[2].onload = imageLoaded;
 enemyImages[3].onload = imageLoaded;
 backgroundImage.onload = imageLoaded;
 
-// Game variables
+const shootSound = new Audio('sounds/shoot.wav');
+const explosionSound = new Audio('sounds/enemy-death.wav');
+
 let score = 0;
 let playerHP = 3;
 let gameOver = false;
@@ -60,21 +62,18 @@ let powerUpDuration = 0;
 const keys = {};
 const powerUps = [];
 
-// Player object
 const player = {
     x: canvas.width / 2 - 25,
     y: canvas.height - 100,
     width: 50,
     height: 50,
-    speed: 3, // Kecepatan player dikurangi
+    speed: 3,
     lasers: []
 };
 
-// Alien array
 let aliens = [];
 const alienLasers = [];
 
-// Create aliens
 function createAliens() {
     aliens = [];
     const alienWidth = 40;
@@ -87,7 +86,7 @@ function createAliens() {
     for (let row = 0; row < enemyMap.length; row++) {
         for (let col = 0; col < enemyMap[row].length; col++) {
             const type = enemyMap[row][col];
-            if (type !== 0) { // 0 berarti tidak ada musuh
+            if (type !== 0) { 
                 aliens.push({
                     type: type,
                     x: startX + col * spacingX,
@@ -96,8 +95,8 @@ function createAliens() {
                     height: alienHeight,
                     speed: 1 + wave * 0.2,
                     direction: 1,
-                    canShoot: Math.random() < 0.02, // Kemungkinan musuh menembak ditingkatkan
-                    shootCooldown: 60, // Cooldown tembakan dikurangi
+                    canShoot: Math.random() < 0.02, 
+                    shootCooldown: 60,
                 });
             }
         }
@@ -149,7 +148,6 @@ function drawAlienLasers() {
         ctx.fillRect(laser.x, laser.y, 5, 10);
         laser.y += laser.speed;
 
-        // Cek tabrakan dengan player
         if (
             laser.x < player.x + player.width &&
             laser.x + 5 > player.x &&
@@ -210,7 +208,6 @@ function handlePowerUpCollision() {
     });
 }
 
-// Fire lasers based on power-up
 function fireLaser() {
     if (powerUpActive === 'double') {
         player.lasers.push({ x: player.x + 5, y: player.y, speed: 6 });
@@ -222,9 +219,9 @@ function fireLaser() {
     } else {
         player.lasers.push({ x: player.x + player.width / 2 - 2.5, y: player.y, speed: 6 });
     }
+    shootSound.play(); // Memainkan suara menembak
 }
 
-// Move and draw lasers
 function drawLasers() {
     player.lasers.forEach((laser, index) => {
         ctx.fillStyle = 'red';
@@ -243,6 +240,7 @@ function drawLasers() {
                 player.lasers.splice(index, 1);
                 aliens.splice(alienIndex, 1);
                 score += 100;
+                explosionSound.play(); // Memainkan suara musuh mati
             }
         });
 
